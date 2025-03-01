@@ -22,7 +22,7 @@ namespace Plugin.BLE
         /// <summary>
         /// Set this field to force are task builder execute() actions to be invoked on the main app tread one at a time (synchronous queue)
         /// </summary>
-        public static bool ShouldQueueOnMainThread { get; set; } = true;
+        public static bool ShouldQueueOnMainThread { get; set; } = false;
 
         private static bool IsMainThread
         {
@@ -43,7 +43,6 @@ namespace Plugin.BLE
 
         private BluetoothManager _bluetoothManager;
 
-
         protected override void InitializeNative()
         {
             var ctx = Application.Context;
@@ -51,7 +50,10 @@ namespace Plugin.BLE
                 return;
 
             var statusChangeReceiver = new BluetoothStatusBroadcastReceiver(state => State = state);
-            ctx.RegisterReceiver(statusChangeReceiver, new IntentFilter(BluetoothAdapter.ActionStateChanged));
+            ctx.RegisterReceiver(
+                statusChangeReceiver,
+                new IntentFilter(BluetoothAdapter.ActionStateChanged)
+            );
 
             _bluetoothManager = (BluetoothManager)ctx.GetSystemService(Context.BluetoothService);
 
@@ -59,7 +61,6 @@ namespace Plugin.BLE
             {
                 TaskBuilder.MainThreadInvoker = action =>
                 {
-
                     if (IsMainThread)
                     {
                         action();
@@ -77,17 +78,19 @@ namespace Plugin.BLE
             }
         }
 
-        protected override BluetoothState GetInitialStateNative()
-            => _bluetoothManager?.Adapter.State.ToBluetoothState() ?? BluetoothState.Unavailable;
+        protected override BluetoothState GetInitialStateNative() =>
+            _bluetoothManager?.Adapter.State.ToBluetoothState() ?? BluetoothState.Unavailable;
 
-        protected override IAdapter CreateNativeAdapter()
-            => new Adapter(_bluetoothManager);
+        protected override IAdapter CreateNativeAdapter() => new Adapter(_bluetoothManager);
 
         public override Task<bool> TrySetStateAsync(bool on)
         {
-            const string ACTION_REQUEST_DISABLE = "android.bluetooth.adapter.action.REQUEST_DISABLE";
+            const string ACTION_REQUEST_DISABLE =
+                "android.bluetooth.adapter.action.REQUEST_DISABLE";
 
-            var intent = new Intent(on ? BluetoothAdapter.ActionRequestEnable : ACTION_REQUEST_DISABLE);
+            var intent = new Intent(
+                on ? BluetoothAdapter.ActionRequestEnable : ACTION_REQUEST_DISABLE
+            );
             intent.SetFlags(ActivityFlags.NewTask);
             Application.Context.StartActivity(intent);
             return Task.FromResult(true);

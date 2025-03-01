@@ -1,17 +1,17 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
-using Windows.Devices.Bluetooth;
 using Plugin.BLE.Abstractions;
 using Plugin.BLE.Abstractions.Contracts;
 using Plugin.BLE.Extensions;
-using System.Threading;
-using System.Collections.Concurrent;
-using WBluetooth = global::Windows.Devices.Bluetooth;
-using static System.Net.Mime.MediaTypeNames;
+using Windows.Devices.Bluetooth;
 using Windows.Devices.Bluetooth.GenericAttributeProfile;
 using Windows.Devices.Enumeration;
+using static System.Net.Mime.MediaTypeNames;
+using WBluetooth = global::Windows.Devices.Bluetooth;
 
 namespace Plugin.BLE.Windows
 {
@@ -24,8 +24,14 @@ namespace Plugin.BLE.Windows
         private GattSession gattSession = null;
         private bool isDisposed = false;
 
-        public Device(Adapter adapter, BluetoothLEDevice nativeDevice, int rssi, Guid id,
-            IReadOnlyList<AdvertisementRecord> advertisementRecords = null, bool isConnectable = true)
+        public Device(
+            Adapter adapter,
+            BluetoothLEDevice nativeDevice,
+            int rssi,
+            Guid id,
+            IReadOnlyList<AdvertisementRecord> advertisementRecords = null,
+            bool isConnectable = true
+        )
             : base(adapter, nativeDevice)
         {
             Rssi = rssi;
@@ -35,7 +41,10 @@ namespace Plugin.BLE.Windows
             IsConnectable = isConnectable;
         }
 
-        internal void Update(short btAdvRawSignalStrengthInDBm, IReadOnlyList<AdvertisementRecord> advertisementData)
+        internal void Update(
+            short btAdvRawSignalStrengthInDBm,
+            IReadOnlyList<AdvertisementRecord> advertisementData
+        )
         {
             this.Rssi = btAdvRawSignalStrengthInDBm;
             this.AdvertisementRecords = advertisementData;
@@ -67,24 +76,33 @@ namespace Plugin.BLE.Windows
             NativeDevice = await BluetoothLEDevice.FromBluetoothAddressAsync(bleAddress);
         }
 
-        protected override async Task<IReadOnlyList<IService>> GetServicesNativeAsync(CancellationToken cancellationToken)
+        protected override async Task<IReadOnlyList<IService>> GetServicesNativeAsync(
+            CancellationToken cancellationToken
+        )
         {
             if (NativeDevice == null)
                 return new List<IService>();
 
-            var result = await NativeDevice.GetGattServicesAsync(BleImplementation.CacheModeGetServices);
+            var result = await NativeDevice.GetGattServicesAsync(
+                BleImplementation.CacheModeGetServices
+            );
             result?.ThrowIfError();
 
-            return result?.Services?
-                .Select(nativeService => new Service(nativeService, this))
-                .Cast<IService>()
-                .ToList() ?? new List<IService>();
-
+            return result
+                    ?.Services?.Select(nativeService => new Service(nativeService, this))
+                    .Cast<IService>()
+                    .ToList() ?? new List<IService>();
         }
 
-        protected override async Task<IService> GetServiceNativeAsync(Guid id, CancellationToken cancellationToken)
+        protected override async Task<IService> GetServiceNativeAsync(
+            Guid id,
+            CancellationToken cancellationToken
+        )
         {
-            var result = await NativeDevice.GetGattServicesForUuidAsync(id, BleImplementation.CacheModeGetServices);
+            var result = await NativeDevice.GetGattServicesForUuidAsync(
+                id,
+                BleImplementation.CacheModeGetServices
+            );
             result.ThrowIfError();
 
             var nativeService = result.Services?.FirstOrDefault();
@@ -107,10 +125,15 @@ namespace Plugin.BLE.Windows
             {
                 return DeviceState.Connected;
             }
-            return NativeDevice.WasSecureConnectionUsedForPairing ? DeviceState.Limited : DeviceState.Disconnected;
+            return NativeDevice.WasSecureConnectionUsedForPairing
+                ? DeviceState.Limited
+                : DeviceState.Disconnected;
         }
 
-        protected override async Task<int> RequestMtuNativeAsync(int requestValue, CancellationToken cancellationToken)
+        protected override async Task<int> RequestMtuNativeAsync(
+            int requestValue,
+            CancellationToken cancellationToken
+        )
         {
             // Ref https://learn.microsoft.com/en-us/uwp/api/windows.devices.bluetooth.genericattributeprofile.gattsession.maxpdusize
             // There are no means in windows to request a change, but we can read the current value
@@ -128,7 +151,10 @@ namespace Plugin.BLE.Windows
             return false;
         }
 
-        static bool MaybeRequestPreferredConnectionParameters(BluetoothLEDevice device, ConnectParameters connectParameters)
+        static bool MaybeRequestPreferredConnectionParameters(
+            BluetoothLEDevice device,
+            ConnectParameters connectParameters
+        )
         {
 #if WINDOWS10_0_22000_0_OR_GREATER
             if (Environment.OSVersion.Version.Build < 22000)
@@ -136,7 +162,7 @@ namespace Plugin.BLE.Windows
                 return false;
             }
             BluetoothLEPreferredConnectionParameters parameters = null;
-            switch(connectParameters.ConnectionParameterSet)
+            switch (connectParameters.ConnectionParameterSet)
             {
                 case ConnectionParameterSet.Balanced:
                     parameters = BluetoothLEPreferredConnectionParameters.Balanced;
@@ -148,22 +174,28 @@ namespace Plugin.BLE.Windows
                     parameters = BluetoothLEPreferredConnectionParameters.ThroughputOptimized;
                     break;
                 case ConnectionParameterSet.None:
-                default:                    
+                default:
                     break;
             }
             if (parameters is not null)
             {
                 var conreq = device.RequestPreferredConnectionParameters(parameters);
-                Trace.Message($"RequestPreferredConnectionParameters({connectParameters.ConnectionParameterSet}): {conreq.Status}");
-                return conreq.Status == BluetoothLEPreferredConnectionParametersRequestStatus.Success;
+                Trace.Message(
+                    $"RequestPreferredConnectionParameters({connectParameters.ConnectionParameterSet}): {conreq.Status}"
+                );
+                return conreq.Status
+                    == BluetoothLEPreferredConnectionParametersRequestStatus.Success;
             }
             return true;
-#else 
+#else
             return false;
 #endif
-
         }
-        public async Task<bool> ConnectInternal(ConnectParameters connectParameters, CancellationToken cancellationToken)
+
+        public async Task<bool> ConnectInternal(
+            ConnectParameters connectParameters,
+            CancellationToken cancellationToken
+        )
         {
             // ref https://learn.microsoft.com/en-us/uwp/api/windows.devices.bluetooth.bluetoothledevice.frombluetoothaddressasync
             // Creating a BluetoothLEDevice object by calling this method alone doesn't (necessarily) initiate a connection.
@@ -206,7 +238,10 @@ namespace Plugin.BLE.Windows
             }
         }
 
-        private void GattSession_SessionStatusChanged(GattSession sender, GattSessionStatusChangedEventArgs args)
+        private void GattSession_SessionStatusChanged(
+            GattSession sender,
+            GattSessionStatusChangedEventArgs args
+        )
         {
             Trace.Message("GattSession_SessionStatusChanged: " + args.Status);
         }
@@ -246,14 +281,22 @@ namespace Plugin.BLE.Windows
 
         public override bool IsConnectable { get; protected set; }
 
-        public override bool SupportsIsConnectable { get => true; }
+        public override bool SupportsIsConnectable
+        {
+            get => true;
+        }
 
         protected override DeviceBondState GetBondState()
         {
             try
             {
-                DeviceInformation deviceInformation = DeviceInformation.CreateFromIdAsync(NativeDevice.DeviceId).AsTask().Result;
-                return deviceInformation.Pairing.IsPaired ? DeviceBondState.Bonded : DeviceBondState.NotBonded;                
+                DeviceInformation deviceInformation = DeviceInformation
+                    .CreateFromIdAsync(NativeDevice.DeviceId)
+                    .AsTask()
+                    .Result;
+                return deviceInformation.Pairing.IsPaired
+                    ? DeviceBondState.Bonded
+                    : DeviceBondState.NotBonded;
             }
             catch (Exception ex)
             {
@@ -262,7 +305,9 @@ namespace Plugin.BLE.Windows
             }
         }
 
-        public override bool UpdateConnectionParameters(ConnectParameters connectParameters = default)
+        public override bool UpdateConnectionParameters(
+            ConnectParameters connectParameters = default
+        )
         {
             return MaybeRequestPreferredConnectionParameters(NativeDevice, connectParameters);
         }
